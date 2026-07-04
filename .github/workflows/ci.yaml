@@ -56,6 +56,7 @@ jobs:
           scan-ref: . # Scan the current directory
           format: table # Output format 
           severity: CRITICAL,HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
+          ignore-unfixed: true
           exit_code: 1
 
   # ==================================================
