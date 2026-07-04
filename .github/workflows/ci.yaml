@@ -1,0 +1,146 @@
+name: Todo app CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ==================================================
+  # Job 1: run unit tests for backend
+  # ==================================================
+  test:
+    runs-on: ubuntu-latest
+    
+    # Creating temporary postgres DB for testing
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tododb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # checkout (download) the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set up python
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest
+      
+      # Run tests
+      - name: Run tests
+        env: 
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tododb
+          SECRET_KEY: test-secret
+        run: |
+          cd backend
+          pytest tests/ -v
+
+  
+  # ==================================================
+  # Job 2: Security Scan
+  # Scans the code before creating an image
+  # ==================================================
+  scan-code:
+    runs-on: ubuntu-latest
+    needs: test # This job will only run if the test job is successful
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Trivy Scan - Filesystem
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs # Scan the filesystem
+          scan-ref: . # Scan the current directory
+          format: table # Output format 
+          severity-threshold: CRITICAL, HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
+          exit_code: 1
+
+  # ==================================================
+  # Job 3: Build and push docker image to DockerHub
+  # Building both backend and frontend images and pushing to DockerHub
+  # Running only after the scan job is successful
+  # ==================================================
+  build-push:
+    runs-on: ubuntu-latest
+    needs: scan-code 
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Only run this job on push to main branch
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with: 
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
+      
+  
+  # ==================================================
+  # Job 4: Scan docker images with Trivy
+  # Scans the docker images after they are pushed to DockerHub
+  # ==================================================
+  scan-images:
+    runs-on: ubuntu-latest
+    needs: build-push 
+
+    steps:
+      - name: Trivy Scan - backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
+          severity-threshold: CRITICAL, HIGH
+          exit-code: 1
+      
+      - name: Trivy Scan - frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
+          severity-threshold: CRITICAL, HIGH
+          exit-code: 1
