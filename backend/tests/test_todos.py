@@ -7,7 +7,7 @@ def get_token():
     client.post("/api/users/register", json={
         "username": "testuser",
         "email": "test@test.com",
-        "password": "testpass123"
+        "password": "testpass123"    # short password
     })
     res = client.post("/api/users/login", data={
         "username": "testuser",
