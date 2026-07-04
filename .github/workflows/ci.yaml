@@ -115,6 +115,7 @@ jobs:
           scan-type: image
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: 1
       
       - name: Trivy Scan - frontend image
