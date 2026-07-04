@@ -55,7 +55,7 @@ jobs:
           scan-type: fs # Scan the filesystem
           scan-ref: . # Scan the current directory
           format: table # Output format 
-          severity: CRITICAL, HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
+          severity: CRITICAL,HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
           exit_code: 1
 
   # ==================================================
@@ -122,5 +122,5 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
-          severity: CRITICAL, HIGH
+          severity: CRITICAL,HIGH
           exit-code: 1
