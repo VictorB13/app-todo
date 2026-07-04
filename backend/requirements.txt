@@ -6,4 +6,5 @@ python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.30
 pydantic[email]==2.7.1
-starlette==0.41.3
+starlette==1.1.0
+pyasn1==0.6.3

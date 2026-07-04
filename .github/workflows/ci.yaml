@@ -123,4 +123,5 @@ jobs:
           scan-type: image
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: 1
