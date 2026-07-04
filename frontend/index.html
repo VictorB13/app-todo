@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Taskly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-card">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>Taskly</h1>
+      </div>
+      <p class="brand-sub">Get things done.</p>
+
+      <div class="tabs">
+        <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
+        <button class="tab" id="tab-register" onclick="switchTab('register')">Register</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="form-login">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="login-username" placeholder="your username" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" />
+        </div>
+        <div id="login-error" class="error-msg hidden"></div>
+        <button class="btn-primary" onclick="login()">Sign in</button>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="form-register" class="hidden">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="reg-username" placeholder="choose a username" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="••••••••" />
+        </div>
+        <div id="register-error" class="error-msg hidden"></div>
+        <button class="btn-primary" onclick="register()">Create account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SCREEN -->
+  <div id="app-screen" class="screen hidden">
+    <header>
+      <div class="header-left">
+        <span class="brand-dot"></span>
+        <span class="header-title">Taskly</span>
+      </div>
+      <div class="header-right">
+        <span id="username-display"></span>
+        <button class="btn-logout" onclick="logout()">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-header">
+        <div>
+          <h2 id="greeting"></h2>
+          <p class="page-sub" id="task-count"></p>
+        </div>
+      </div>
+
+      <div class="add-todo-bar">
+        <input type="text" id="new-title" placeholder="Add a task..." />
+        <input type="text" id="new-desc" placeholder="Description (optional)" />
+        <button class="btn-add" onclick="createTodo()">Add</button>
+      </div>
+
+      <div id="todo-list"></div>
+      <div id="empty-state" class="empty-state hidden">
+        <p>No tasks yet. Add one above.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
