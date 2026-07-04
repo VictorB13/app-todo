@@ -9,7 +9,7 @@ on:
 jobs:
 
   # ==================================================
-  # Job 1: run unit tests for backend
+  # Job 1: run tests for backend
   # ==================================================
   test:
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
       - name: Check backend syntax
         run: |
           cd backend
-          python3 -m py_compile app.py
+          python3 -m py_compile app/main.py
       
 
   
