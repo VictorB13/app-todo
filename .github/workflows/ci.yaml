@@ -53,6 +53,7 @@ jobs:
         env: 
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tododb
           SECRET_KEY: test-secret
+          PYTHONPATH: /home/runner/work/app-todo/app-todo/backend
         run: |
           cd backend
           pytest tests/ -v
@@ -75,7 +76,7 @@ jobs:
           scan-type: fs # Scan the filesystem
           scan-ref: . # Scan the current directory
           format: table # Output format 
-          severity-threshold: CRITICAL, HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
+          severity: CRITICAL, HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
           exit_code: 1
 
   # ==================================================
@@ -134,7 +135,7 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
-          severity-threshold: CRITICAL, HIGH
+          severity: CRITICAL, HIGH
           exit-code: 1
       
       - name: Trivy Scan - frontend image
@@ -142,5 +143,5 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
-          severity-threshold: CRITICAL, HIGH
+          severity: CRITICAL, HIGH
           exit-code: 1
