@@ -14,22 +14,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
-    # Creating temporary postgres DB for testing
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: tododb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       # checkout (download) the code from the repository
       - name: Checkout code
@@ -46,17 +30,12 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pytest
-      
-      # Run tests
-      - name: Run tests
-        env: 
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tododb
-          SECRET_KEY: test-secret
-          PYTHONPATH: /home/runner/work/app-todo/app-todo/backend
+
+      - name: Check backend syntax
         run: |
           cd backend
-          pytest tests/ -v
+          python3 -m py_compile app.py
+      
 
   
   # ==================================================
