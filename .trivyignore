@@ -1,0 +1,5 @@
+# nginx CVEs pending patch availability in Alpine APK repos (fixed in 1.28.3-r4)
+# These are tracked - remove this file once nginx:1.28-alpine ships with r4 or higher.
+CVE-2026-9256
+CVE-2026-42055
+CVE-2026-49975

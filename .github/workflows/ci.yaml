@@ -54,9 +54,10 @@ jobs:
         with:
           scan-type: fs # Scan the filesystem
           scan-ref: . # Scan the current directory
-          format: table # Output format 
+          format: table # Output format
           severity: CRITICAL,HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit_code: 1
 
   # ==================================================
@@ -114,6 +115,9 @@ jobs:
     needs: build-push 
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Trivy Scan - backend image
         uses: aquasecurity/trivy-action@master
         with:
@@ -121,8 +125,9 @@ jobs:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: 1
-      
+
       - name: Trivy Scan - frontend image
         uses: aquasecurity/trivy-action@master
         with:
@@ -130,4 +135,5 @@ jobs:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: 1
