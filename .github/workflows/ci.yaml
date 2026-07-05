@@ -82,10 +82,12 @@ jobs:
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
-        with: 
+        with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
+          pull: true
+          no-cache: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
@@ -96,6 +98,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          pull: true
+          no-cache: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
