@@ -1,8 +1,10 @@
-FROM nginx:1.28-alpine
-RUN apk update && apk upgrade --no-cache
-RUN rm /etc/nginx/conf.d/default.conf
+FROM alpine:3.23
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache nginx \
+    && mkdir -p /usr/share/nginx/html \
+    && rm -f /etc/nginx/http.d/default.conf
+
+COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY index.html /usr/share/nginx/html/
 COPY style.css  /usr/share/nginx/html/
 COPY app.js     /usr/share/nginx/html/
