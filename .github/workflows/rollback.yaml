@@ -1,0 +1,141 @@
+name: Rollback
+
+# Manually roll the live app back to a previous image tag (git SHA).
+# Updates infra-gitops values-prod.yaml → ArgoCD auto-syncs the cluster.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to roll back to (usually a full git SHA from a previous CI build)"
+        required: true
+        type: string
+      reason:
+        description: "Why are we rolling back? (optional)"
+        required: false
+        type: string
+        default: "manual rollback"
+
+permissions:
+  contents: read
+
+env:
+  GITOPS_REPO: VictorB13/infra-gitops
+  GITOPS_BRANCH: main
+  VALUES_FILE: charts/todo-app/values-prod.yaml
+
+jobs:
+  rollback:
+    name: Update GitOps image tags
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate image tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          TAG="$(echo "$TAG" | xargs)"
+          if [ -z "$TAG" ] || [ "$TAG" = "latest" ]; then
+            echo "Refuse to roll back to an empty tag or 'latest'. Pass a specific git SHA tag."
+            exit 1
+          fi
+          echo "Rolling back to tag: $TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Checkout infra-gitops
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: infra-gitops
+
+      - name: Show current tags
+        working-directory: infra-gitops
+        run: |
+          echo "Current values-prod image tags:"
+          grep -n "tag:" "${{ env.VALUES_FILE }}" || true
+
+      - name: Update backend & frontend tags
+        working-directory: infra-gitops
+        env:
+          VALUES_FILE: ${{ env.VALUES_FILE }}
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import os, re
+
+          path = Path(os.environ["VALUES_FILE"])
+          tag = os.environ["TAG"]
+          lines = path.read_text().splitlines()
+          out = []
+          section = None
+          in_image = False
+          for line in lines:
+              stripped = line.lstrip()
+              indent = len(line) - len(stripped)
+              if re.match(r"^backend:\s*$", line):
+                  section = "backend"
+                  in_image = False
+              elif re.match(r"^frontend:\s*$", line):
+                  section = "frontend"
+                  in_image = False
+              elif section in ("backend", "frontend") and re.match(r"^image:\s*$", stripped) and indent >= 2:
+                  in_image = True
+              elif section in ("backend", "frontend") and in_image and re.match(r"^tag:\s*", stripped):
+                  line = f"{' ' * indent}tag: {tag}"
+                  in_image = False
+              elif section and indent == 0 and stripped and not stripped.startswith("#") and not re.match(r"^(backend|frontend):\s*$", line):
+                  if not stripped.startswith(" "):
+                      section = None
+                      in_image = False
+              out.append(line)
+
+          path.write_text("\n".join(out) + "\n")
+          print(path.read_text())
+          PY
+
+      - name: Align image repositories with Docker Hub user
+        working-directory: infra-gitops
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          if [ -z "$DOCKERHUB_USER" ]; then
+            echo "DOCKERHUB_USERNAME secret is required"
+            exit 1
+          fi
+          sed -i "s|repository: .*/todo-backend|repository: ${DOCKERHUB_USER}/todo-backend|" "${{ env.VALUES_FILE }}"
+          sed -i "s|repository: .*/todo-frontend|repository: ${DOCKERHUB_USER}/todo-frontend|" "${{ env.VALUES_FILE }}"
+          grep -n "repository:\|tag:" "${{ env.VALUES_FILE }}"
+
+      - name: Commit and push to infra-gitops
+        working-directory: infra-gitops
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.VALUES_FILE }}"
+          if git diff --staged --quiet; then
+            echo "No changes — tags may already be set to ${TAG}"
+            exit 0
+          fi
+          git commit -m "$(cat <<EOF
+          rollback: set todo images to ${TAG}
+
+          Reason: ${{ inputs.reason }}
+          Triggered from: ${{ github.repository }}@${{ github.sha }}
+          Actor: ${{ github.actor }}
+          EOF
+          )"
+          git push origin "HEAD:${{ env.GITOPS_BRANCH }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Rollback requested"
+            echo ""
+            echo "- **Image tag:** \`${TAG}\`"
+            echo "- **Reason:** ${{ inputs.reason }}"
+            echo "- **GitOps repo:** \`${{ env.GITOPS_REPO }}\`"
+            echo "- **File:** \`${{ env.VALUES_FILE }}\`"
+            echo ""
+            echo "ArgoCD should auto-sync the \`todo-app\` Application shortly."
+          } >> "$GITHUB_STEP_SUMMARY"
