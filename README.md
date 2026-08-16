@@ -13,17 +13,19 @@ docker compose up --build
 - API docs: http://localhost:8000/docs
 
 ## CI/CD
-- CI: GitHub Actions (tests, Trivy scan, Docker Hub push)
-- CD: ArgoCD (GitOps via `infra-gitops`)
+- **CI:** tests → Trivy (code) → build/push images → Trivy (images)
+- **CD:** on push to `main`, update image tags in `infra-gitops` (`values-prod.yaml`) → ArgoCD syncs the cluster
+- **Rollback:** manual workflow to set tags back to a previous git SHA
+
+### Secrets (app-todo)
+
+| Secret | Used by |
+|---|---|
+| `DOCKERHUB_USERNAME` / `DOCKERHUB_PASSWORD` | CI image push |
+| `GITOPS_TOKEN` | CD + Rollback (write to `infra-gitops`) |
 
 ### Manual jobs (Actions UI)
 
 | Workflow | Purpose |
 |---|---|
-| **Rollback** | Set backend/frontend image tags in `infra-gitops` to a previous CI git SHA; ArgoCD syncs |
-
-**Rollback secrets** (on `app-todo`):
-- `DOCKERHUB_USERNAME` — same as CI
-- `GITOPS_TOKEN` — GitHub PAT with **contents: write** on `VictorB13/infra-gitops`
-
-**How to roll back:** Actions → Rollback → Run workflow → paste the image tag (full `github.sha` from a previous green CI build).
+| **Rollback** | Set backend/frontend tags in `infra-gitops` to a previous CI git SHA |

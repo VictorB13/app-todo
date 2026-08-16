@@ -13,19 +13,16 @@ jobs:
   # ==================================================
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-      # checkout (download) the code from the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up python
       - name: Setup python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
-      # Install dependencies
+
       - name: Install dependencies
         run: |
           cd backend
@@ -35,40 +32,35 @@ jobs:
         run: |
           cd backend
           python3 -m py_compile app/main.py
-      
 
-  
   # ==================================================
   # Job 2: Security Scan
-  # Scans the code before creating an image
   # ==================================================
   scan-code:
     runs-on: ubuntu-latest
-    needs: test # This job will only run if the test job is successful
+    needs: test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Trivy Scan - Filesystem
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: fs # Scan the filesystem
-          scan-ref: . # Scan the current directory
-          format: table # Output format
-          severity: CRITICAL,HIGH # Only show vulnerabilities with CRITICAL or HIGH severity
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit_code: 1
 
   # ==================================================
-  # Job 3: Build and push docker image to DockerHub
-  # Building both backend and frontend images and pushing to DockerHub
-  # Running only after the scan job is successful
+  # Job 3: Build and push docker images
   # ==================================================
   build-push:
     runs-on: ubuntu-latest
-    needs: scan-code 
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Only run this job on push to main branch
+    needs: scan-code
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -79,7 +71,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -104,15 +95,13 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
-      
-  
+
   # ==================================================
   # Job 4: Scan docker images with Trivy
-  # Scans the docker images after they are pushed to DockerHub
   # ==================================================
   scan-images:
     runs-on: ubuntu-latest
-    needs: build-push 
+    needs: build-push
 
     steps:
       - name: Checkout code
@@ -137,3 +126,110 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: 1
+
+  # ==================================================
+  # Job 5: CD — update infra-gitops image tags
+  # ==================================================
+  deploy:
+    name: Deploy (update GitOps tags)
+    runs-on: ubuntu-latest
+    needs: scan-images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      GITOPS_REPO: VictorB13/infra-gitops
+      GITOPS_BRANCH: main
+      VALUES_FILE: charts/todo-app/values-prod.yaml
+
+    steps:
+      - name: Checkout infra-gitops
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: infra-gitops
+
+      - name: Set image tag from commit SHA
+        run: echo "TAG=${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Update backend & frontend tags
+        working-directory: infra-gitops
+        env:
+          VALUES_FILE: ${{ env.VALUES_FILE }}
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import os, re
+
+          path = Path(os.environ["VALUES_FILE"])
+          tag = os.environ["TAG"]
+          lines = path.read_text().splitlines()
+          out = []
+          section = None
+          in_image = False
+          for line in lines:
+              stripped = line.lstrip()
+              indent = len(line) - len(stripped)
+              if re.match(r"^backend:\s*$", line):
+                  section = "backend"
+                  in_image = False
+              elif re.match(r"^frontend:\s*$", line):
+                  section = "frontend"
+                  in_image = False
+              elif section in ("backend", "frontend") and re.match(r"^image:\s*$", stripped) and indent >= 2:
+                  in_image = True
+              elif section in ("backend", "frontend") and in_image and re.match(r"^tag:\s*", stripped):
+                  line = f"{' ' * indent}tag: {tag}"
+                  in_image = False
+              elif section and indent == 0 and stripped and not stripped.startswith("#") and not re.match(r"^(backend|frontend):\s*$", line):
+                  if not stripped.startswith(" "):
+                      section = None
+                      in_image = False
+              out.append(line)
+
+          path.write_text("\n".join(out) + "\n")
+          print(path.read_text())
+          PY
+
+      - name: Align image repositories with Docker Hub user
+        working-directory: infra-gitops
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          if [ -z "$DOCKERHUB_USER" ]; then
+            echo "DOCKERHUB_USERNAME secret is required"
+            exit 1
+          fi
+          sed -i "s|repository: .*/todo-backend|repository: ${DOCKERHUB_USER}/todo-backend|" "${{ env.VALUES_FILE }}"
+          sed -i "s|repository: .*/todo-frontend|repository: ${DOCKERHUB_USER}/todo-frontend|" "${{ env.VALUES_FILE }}"
+          grep -n "repository:\|tag:" "${{ env.VALUES_FILE }}"
+
+      - name: Commit and push to infra-gitops
+        working-directory: infra-gitops
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.VALUES_FILE }}"
+          if git diff --staged --quiet; then
+            echo "No changes — tags may already be set to ${TAG}"
+            exit 0
+          fi
+          git commit -m "$(cat <<EOF
+          deploy: set todo images to ${TAG}
+
+          Source: ${{ github.repository }}@${{ github.sha }}
+          Actor: ${{ github.actor }}
+          EOF
+          )"
+          git push origin "HEAD:${{ env.GITOPS_BRANCH }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "## CD deploy"
+            echo ""
+            echo "- **Image tag:** \`${TAG}\`"
+            echo "- **GitOps file:** \`${{ env.VALUES_FILE }}\`"
+            echo "- ArgoCD will sync \`todo-app\` when the cluster is up."
+          } >> "$GITHUB_STEP_SUMMARY"
